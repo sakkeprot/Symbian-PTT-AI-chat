@@ -220,37 +220,32 @@ else
   fi
 
   if [[ "$BUILD_OK" == true ]]; then
-    # Fix ownership so configure/make can write temp files
-    echo "  → Fixing ownership of build directory"
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$FFMPEG_DIR"
-
     echo "  → Configuring ffmpeg"
-    sudo -u "$SERVICE_USER" bash -c "
-      cd '$FFMPEG_DIR'
-      ./configure \
-        --enable-libopencore-amrnb \
-        --enable-libopencore-amrwb \
-        --enable-version3 --enable-gpl --enable-nonfree \
-        --enable-libmp3lame --enable-libopus \
-        --prefix=/usr/local \
-        --disable-doc --disable-htmlpages \
-        --disable-manpages --disable-podpages --disable-txtpages \
-        >> '$INSTALL_LOG' 2>&1
-    " || { warn "ffmpeg configure failed — see $INSTALL_LOG"; BUILD_OK=false; }
+    # Run configure directly as root — we are already root and this is simplest
+    cd "$FFMPEG_DIR"
+    ./configure \
+      --enable-libopencore-amrnb \
+      --enable-libopencore-amrwb \
+      --enable-version3 --enable-gpl --enable-nonfree \
+      --enable-libmp3lame --enable-libopus \
+      --prefix=/usr/local \
+      --disable-doc --disable-htmlpages \
+      --disable-manpages --disable-podpages --disable-txtpages \
+      >> "$INSTALL_LOG" 2>&1 \
+      || { warn "ffmpeg configure failed — see $INSTALL_LOG"; BUILD_OK=false; }
   fi
 
   if [[ "$BUILD_OK" == true ]]; then
-    echo "  → Compiling ffmpeg  (this is the slow part)"
-    sudo -u "$SERVICE_USER" bash -c "
-      cd '$FFMPEG_DIR'
-      make -j\$(nproc) >> '$INSTALL_LOG' 2>&1
-    " || { warn "ffmpeg compile failed — see $INSTALL_LOG"; BUILD_OK=false; }
+    echo "  → Compiling ffmpeg  (this is the slow part — ~5-10 min)"
+    cd "$FFMPEG_DIR"
+    make -j"$(nproc)" >> "$INSTALL_LOG" 2>&1 \
+      || { warn "ffmpeg compile failed — see $INSTALL_LOG"; BUILD_OK=false; }
   fi
 
   if [[ "$BUILD_OK" == true ]]; then
     echo "  → Installing ffmpeg to /usr/local"
-    # make install and ldconfig need root
-    ( cd "$FFMPEG_DIR" && make install >> "$INSTALL_LOG" 2>&1 ) \
+    cd "$FFMPEG_DIR"
+    make install >> "$INSTALL_LOG" 2>&1 \
       || { warn "ffmpeg install failed — see $INSTALL_LOG"; BUILD_OK=false; }
     ldconfig >> "$INSTALL_LOG" 2>&1
   fi
@@ -305,7 +300,7 @@ else
 
   if [[ ! -d "$WHISPER_DIR" ]]; then
     echo "  → Cloning whisper.cpp"
-    sudo -u "$SERVICE_USER" git clone \
+    git clone \
       https://github.com/ggerganov/whisper.cpp.git "$WHISPER_DIR" \
       >> "$INSTALL_LOG" 2>&1 \
       || { warn "whisper.cpp clone failed — STT fallback unavailable"; WHISPER_OK=false; }
@@ -313,28 +308,28 @@ else
 
   if [[ "$WHISPER_OK" == true ]]; then
     echo "  → Building whisper.cpp"
-    sudo -u "$SERVICE_USER" bash -c "
-      cd '$WHISPER_DIR'
-      cmake -B build -DWHISPER_BUILD_EXAMPLES=ON >> '$INSTALL_LOG' 2>&1 \
-        && cmake --build build --config Release -j\$(nproc) >> '$INSTALL_LOG' 2>&1
-    " || { warn "whisper.cpp build failed — STT fallback unavailable"; WHISPER_OK=false; }
+    cd "$WHISPER_DIR"
+    cmake -B build -DWHISPER_BUILD_EXAMPLES=ON >> "$INSTALL_LOG" 2>&1       && cmake --build build --config Release -j"$(nproc)" >> "$INSTALL_LOG" 2>&1       || { warn "whisper.cpp build failed — STT fallback unavailable"; WHISPER_OK=false; }
   fi
 
   if [[ "$WHISPER_OK" == true ]]; then
     echo "  → Downloading base model (~145 MB)"
-    sudo -u "$SERVICE_USER" bash -c "
-      cd '$WHISPER_DIR'
-      mkdir -p models
-      bash models/download-ggml-model.sh base >> '$INSTALL_LOG' 2>&1
-    " || warn "Model download failed — re-run: bash whisper.cpp/models/download-ggml-model.sh base"
+    cd "$WHISPER_DIR"
+    mkdir -p models
+    bash models/download-ggml-model.sh base >> "$INSTALL_LOG" 2>&1       || warn "Model download failed — re-run: bash whisper.cpp/models/download-ggml-model.sh base"
   fi
 
   if [[ "$WHISPER_OK" == true ]] && [[ -f "$WHISPER_DIR/build/bin/whisper-cli" ]]; then
+    # Fix ownership so service user owns the whisper dir
+    chown -R "$SERVICE_USER:$SERVICE_USER" "$WHISPER_DIR" 2>/dev/null || true
     info "whisper.cpp ready at $WHISPER_DIR"
   else
     warn "whisper.cpp not fully built — Groq will handle STT if key is set"
   fi
 fi
+
+# Return to repo dir after potentially cd-ing elsewhere
+cd "$REPO_DIR"
 
 # =============================================================================
 # ASTERISK
