@@ -396,16 +396,30 @@ def patch_supported(msg):
     return re.sub(r'Supported:\s*(.+)', fix, msg, flags=re.IGNORECASE)
 
 def make_response(code, reason, msg, extra_headers="", body=""):
-    def hdr(pattern): return re.search(pattern, msg, re.I).group(1).strip()
-    to_val = hdr(r'(To:\s*.+)')
-    if 'tag=' not in to_val: to_val += ';tag=pocserver01'
+    def hdr(name):
+        """Extract a SIP header by name — returns a fallback string if missing."""
+        m = re.search(r'(?i)('+ re.escape(name) + r'\s*:.+)', msg)
+        if m:
+            return m.group(1).strip()
+        log("SIP", f"WARNING: header '{name}' not found — message may be malformed")
+        return f"{name}: unknown"
+
+    via    = hdr("Via")
+    frm    = hdr("From")
+    to_val = hdr("To")
+    cid    = hdr("Call-ID")
+    cseq   = hdr("CSeq")
+
+    if 'tag=' not in to_val:
+        to_val += ';tag=pocserver01'
+
     return (
         f"SIP/2.0 {code} {reason}\r\n"
-        f"{hdr(r'(Via:\\s*.+)')}\r\n"
-        f"{hdr(r'(From:\\s*.+)')}\r\n"
+        f"{via}\r\n"
+        f"{frm}\r\n"
         f"{to_val}\r\n"
-        f"{hdr(r'(Call-ID:\\s*.+)')}\r\n"
-        f"{hdr(r'(CSeq:\\s*.+)')}\r\n"
+        f"{cid}\r\n"
+        f"{cseq}\r\n"
         f"{extra_headers}"
         f"Content-Length: {len(body.encode())}\r\n\r\n"
         f"{body}"
