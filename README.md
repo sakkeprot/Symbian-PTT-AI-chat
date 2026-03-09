@@ -39,7 +39,7 @@ Nokia/Symbian PoC phone
 ## Quick install
 
 ```bash
-git clone https://github.com/sakkeprot/Symbian-PTT-AI-chat.git
+git clone https://github.com/YOUR_USERNAME/poc-ai-proxy.git
 cd poc-ai-proxy
 sudo bash install.sh
 ```
@@ -53,18 +53,101 @@ The script will:
 
 ---
 
+---
 
 ## Phone setup (Nokia / Symbian PoC client)
 
-1. Register the phone against your server IP on SIP port **5060**.
-2. Use the account name **`symbian`** — the proxy identifies phones by the `symbian` string in the User-Agent header.
-3. No password is required (Asterisk is configured with `insecure=register`).
-4. Set audio codec preference to **AMR-NB** (payload type 106) if your client allows it; otherwise ulaw/alaw will still work via Asterisk.
+Tested on Nokia E-series handsets running Symbian with the built-in PTT client.
+Replace `PUBLIC_IP` throughout with your server's actual IP address.
+
+---
+
+### Part 1 — SIP registration
+
+**Control Panel → Settings → Connection → SIP Settings → New profile**
+
+| Setting | Value |
+|---------|-------|
+| Profile name | anything (e.g. `PoC AI`) |
+| Service profile | `IETF` |
+| Default destination | your 2G/3G data connection (e.g. `WAP services`) |
+| Public user name | `sip:symbian@PUBLIC_IP` |
+| Use compression | `No` |
+| Registration | `Always on` |
+| Use security | `No` |
+
+Open **Proxy server** — leave everything at defaults.
+
+Open **Registrar server →**
+
+| Setting | Value |
+|---------|-------|
+| Registrar server address | `sip:PUBLIC_IP` |
+| Realm | `asterisk` |
+| Username | `symbian` |
+| Password | anything (registration is open — the value is ignored) |
+| Transport type | `UDP` |
+| Port | `5060` |
+
+---
+
+### Part 2 — PTT application settings
+
+**Control Panel → Settings → Applications → Push to talk**
+
+Under **User Settings:**
+
+| Setting | Value |
+|---------|-------|
+| Application start-up | `Always automatic` |
+
+Under **Connection → New profile:**
+
+| Setting | Value |
+|---------|-------|
+| Profile name | anything |
+| SIP profile in use | the profile you just created above |
+| Presence profile | `None` |
+| XDM profile | `None` |
+| Domain name | `None` |
+
+---
+
+### Part 3 — Add the AI channel
+
+Open the PTT app: **Applications → PTT**, then log in.
+
+> If login fails, double-check your SIP settings and confirm that UDP port **5060** is open on your server.
+
+Navigate to the **Channels** tab, then:
+
+**Options → Add existing → PTT channel**
+
+| Setting | Value |
+|---------|-------|
+| Channel name | `AI` |
+| Channel address | `ai@PUBLIC_IP` |
+| Nickname | anything |
+
+Save, then set it as default: **Options → Set as default**
+
+---
+
+### Part 4 — Making a call
+
+You don't need to stay in the PTT app. Press the home button to background it — the PTT button stays active. To talk to the AI:
+
+1. **Hold the PTT button** and speak your message
+2. Release the button — the AI starts processing
+3. Hold music plays while it thinks
+4. The AI reply is spoken back through the earpiece
+5. The floor is released and you can speak again
 
 ---
 
 
-## Manual setup (step by step)
+
+## Manual setup (step by step if the install script is not working or whatever)
 
 ### 1 — System packages
 
@@ -131,7 +214,7 @@ sudo nano /etc/asterisk/sip.conf
 ```
 
 ```ini
-externaddr=YOUR_PUBLIC_IP        ; e.g. 61.10.65.245
+externaddr=YOUR_PUBLIC_IP        ; e.g. 51.20.75.225
 localnet=172.31.0.0/255.255.0.0  ; your VPC/LAN subnet
 ```
 
@@ -197,6 +280,7 @@ sudo systemctl enable --now poc-proxy
 # Follow logs
 sudo journalctl -u poc-proxy -f
 ```
+
 
 
 ## Adding a new language
