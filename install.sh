@@ -173,7 +173,7 @@ echo "  → Installing core packages"
 apt-get install -y \
   python3 python3-pip python3-venv \
   ffmpeg espeak-ng asterisk \
-  git cmake build-essential \
+  git \
   libssl-dev libsrtp2-dev \
   curl wget >> "$INSTALL_LOG" 2>&1 \
   || warn "Some packages failed to install — check $INSTALL_LOG"
@@ -242,7 +242,7 @@ else
       SPINNER="${SPIN:$SPIN_IDX:1}"
       SPIN_IDX=$(( (SPIN_IDX + 1) % ${#SPIN} ))
       printf "\r  %s  %-65s" "$SPINNER" "$LAST"
-      sleep 0.3
+      sleep 3
     done
     printf "\r%-80s\r" " "
 
@@ -263,7 +263,7 @@ else
 
 
     # Run make in background, all output goes to log
-    make -j"$(nproc)" >> "$INSTALL_LOG" 2>&1 &
+    make -j1 >> "$INSTALL_LOG" 2>&1 &
     MAKE_PID=$!
 
     SPIN='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
@@ -297,7 +297,7 @@ else
       printf "\r  %s  [%s] %3d%%  %-6s %-35s" \
         "$SPINNER" "$BAR" "$PCT" "$STEP" "$FILE"
 
-      sleep 0.5
+      sleep 3
     done
 
     # Clear progress line
@@ -352,54 +352,9 @@ else
   warn "pip3 install failed — try manually: pip3 install requests edge-tts"
 fi
 
-# =============================================================================
-# WHISPER.CPP
-# =============================================================================
-section "Building whisper.cpp  (local STT fallback)"
-WHISPER_DIR="$REPO_DIR/whisper.cpp"
+info "whisper.cpp skipped — using Groq API for STT"
 
-if [[ -f "$WHISPER_DIR/build/bin/whisper-cli" ]]; then
-  info "whisper.cpp already built — skipping"
-else
-  WHISPER_OK=true
-
-  # Remove incomplete clone if present
-  if [[ -d "$WHISPER_DIR" ]] && [[ ! -f "$WHISPER_DIR/CMakeLists.txt" ]]; then
-    echo "  → Removing incomplete whisper.cpp directory"
-    rm -rf "$WHISPER_DIR"
-  fi
-
-  if [[ ! -d "$WHISPER_DIR" ]]; then
-    echo "  → Cloning whisper.cpp"
-    git clone \
-      https://github.com/ggerganov/whisper.cpp.git "$WHISPER_DIR" \
-      >> "$INSTALL_LOG" 2>&1 \
-      || { warn "whisper.cpp clone failed — STT fallback unavailable"; WHISPER_OK=false; }
-  fi
-
-  if [[ "$WHISPER_OK" == true ]]; then
-    echo "  → Building whisper.cpp"
-    cd "$WHISPER_DIR"
-    cmake -B build -DWHISPER_BUILD_EXAMPLES=ON >> "$INSTALL_LOG" 2>&1       && cmake --build build --config Release -j"$(nproc)" >> "$INSTALL_LOG" 2>&1       || { warn "whisper.cpp build failed — STT fallback unavailable"; WHISPER_OK=false; }
-  fi
-
-  if [[ "$WHISPER_OK" == true ]]; then
-    echo "  → Downloading base model (~145 MB)"
-    cd "$WHISPER_DIR"
-    mkdir -p models
-    bash models/download-ggml-model.sh base >> "$INSTALL_LOG" 2>&1       || warn "Model download failed — re-run: bash whisper.cpp/models/download-ggml-model.sh base"
-  fi
-
-  if [[ "$WHISPER_OK" == true ]] && [[ -f "$WHISPER_DIR/build/bin/whisper-cli" ]]; then
-    # Fix ownership so service user owns the whisper dir
-    chown -R "$SERVICE_USER:$SERVICE_USER" "$WHISPER_DIR" 2>/dev/null || true
-    info "whisper.cpp ready at $WHISPER_DIR"
-  else
-    warn "whisper.cpp not fully built — Groq will handle STT if key is set"
-  fi
-fi
-
-# Return to repo dir after potentially cd-ing elsewhere
+# Return to repo dir
 cd "$REPO_DIR"
 
 # =============================================================================
