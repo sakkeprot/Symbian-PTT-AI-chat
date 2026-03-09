@@ -5,10 +5,8 @@ Wants=asterisk.service
 
 [Service]
 Type=simple
-# INSTALL_DIR is written by install.sh into /etc/poc-proxy.env
-EnvironmentFile=/etc/poc-proxy.env
-WorkingDirectory=${INSTALL_DIR}
-ExecStart=/usr/bin/python3 ${INSTALL_DIR}/poc_proxy.py
+WorkingDirectory=/home/ubuntu/Symbian-PTT-AI-chat
+ExecStart=/usr/bin/python3 /home/ubuntu/Symbian-PTT-AI-chat/poc_proxy.py
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
