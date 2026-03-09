@@ -4,35 +4,65 @@
 # Tested on Ubuntu 22.04 / 24.04 (AWS EC2 or any VPS)
 # Run as: sudo bash install.sh   (from inside the cloned repo)
 # =============================================================================
-set -e
 
-# REPO_DIR is wherever this script lives — no hardcoded /home/ubuntu paths
+# NO set -e — we handle errors ourselves and keep going where safe
+
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 REPO_DIR="$SCRIPT_DIR"
 
-# The user who should own the files (whoever cloned the repo, or ubuntu)
+# Detect the real user behind sudo
 if [[ -n "$SUDO_USER" ]]; then
   SERVICE_USER="$SUDO_USER"
+  SERVICE_HOME=$(getent passwd "$SUDO_USER" | cut -d: -f6)
 else
-  SERVICE_USER="ubuntu"
+  SERVICE_USER="$(whoami)"
+  SERVICE_HOME="$HOME"
 fi
 
 RED='\033[0;31m'; GREEN='\033[0;32m'; YELLOW='\033[1;33m'
 CYAN='\033[0;36m'; BOLD='\033[1m'; NC='\033[0m'
 
-info()    { echo -e "${GREEN}[INFO]${NC}  $*"; }
-warn()    { echo -e "${YELLOW}[WARN]${NC}  $*"; }
-section() { echo -e "\n${GREEN}========================================${NC}"
-            echo -e "${GREEN}  $*${NC}"
-            echo -e "${GREEN}========================================${NC}"; }
-ask()     { echo -e "${CYAN}${BOLD}$*${NC}"; }
+# Collect non-fatal warnings to show in the final summary
+WARNINGS=()
 
-if [[ $EUID -ne 0 ]]; then
-  echo -e "${RED}Please run as root:  sudo bash install.sh${NC}"; exit 1
-fi
+info()    { echo -e "${GREEN}  ✓${NC}  $*"; }
+warn()    { echo -e "${YELLOW}  ⚠${NC}  $*"; WARNINGS+=("$*"); }
+err()     { echo -e "${RED}  ✗${NC}  $*"; }
+fatal()   { echo -e "\n${RED}${BOLD}FATAL: $*${NC}\n"; exit 1; }
+section() {
+  echo ""
+  echo -e "${GREEN}${BOLD}════════════════════════════════════════${NC}"
+  echo -e "${GREEN}${BOLD}  $*${NC}"
+  echo -e "${GREEN}${BOLD}════════════════════════════════════════${NC}"
+  echo ""
+}
+ask() { echo -e "${CYAN}${BOLD}$*${NC}"; }
+
+# run CMD — runs a command, warns on failure but does NOT abort
+run() {
+  local desc="$1"; shift
+  echo -e "  ${CYAN}→${NC}  $desc"
+  if "$@" >> "$INSTALL_LOG" 2>&1; then
+    return 0
+  else
+    warn "$desc — failed (see $INSTALL_LOG for details)"
+    return 1
+  fi
+}
 
 # =============================================================================
-# STEP 0 — Welcome
+# Sanity checks
+# =============================================================================
+[[ $EUID -ne 0 ]] && fatal "Please run as root:  sudo bash install.sh"
+[[ ! -f "$REPO_DIR/poc_proxy.py" ]] && fatal "Run this script from inside the cloned repo directory."
+
+INSTALL_LOG="$REPO_DIR/install.log"
+: > "$INSTALL_LOG"   # truncate/create log file
+echo "Install log — $(date)" >> "$INSTALL_LOG"
+echo "REPO_DIR=$REPO_DIR  USER=$SERVICE_USER" >> "$INSTALL_LOG"
+
+# =============================================================================
+# Welcome
 # =============================================================================
 clear
 echo -e "${BOLD}"
@@ -44,9 +74,11 @@ echo "  ██║     ╚██████╔╝╚██████╗    █
 echo "  ╚═╝      ╚═════╝  ╚═════╝    ╚═╝  ╚═╝╚═╝"
 echo -e "${NC}"
 echo -e "${BOLD}  PoC AI Proxy — Installer${NC}"
-echo "  Turns a Nokia/Symbian PoC phone into an AI walkie-talkie"
+echo "  Turns any Nokia PTT phone into an AI walkie-talkie"
 echo ""
 echo -e "  Installing into: ${BOLD}$REPO_DIR${NC}"
+echo -e "  Running as user: ${BOLD}$SERVICE_USER${NC}"
+echo -e "  Full log at:     ${BOLD}$INSTALL_LOG${NC}"
 echo ""
 read -rp "  Press ENTER to begin..." _
 
@@ -54,9 +86,7 @@ read -rp "  Press ENTER to begin..." _
 # STEP 1 — Language
 # =============================================================================
 section "Step 1 of 4 — Language"
-echo ""
-echo "  Choose the language for speech recognition, text-to-speech"
-echo "  and AI replies:"
+echo "  Choose the language for speech recognition, TTS and AI replies:"
 echo ""
 echo "    1)  Dutch    (nl-BE-ArnaudNeural)"
 echo "    2)  English  (en-US-GuyNeural)"
@@ -76,39 +106,30 @@ while true; do
     *) echo -e "  ${RED}Please enter a number between 1 and 5.${NC}" ;;
   esac
 done
-info "Language set to: $LANGUAGE"
+info "Language: $LANGUAGE"
 
 # =============================================================================
 # STEP 2 — DeepSeek API key
 # =============================================================================
 section "Step 2 of 4 — DeepSeek API key  (AI replies)"
-echo ""
-echo "  DeepSeek is the AI that generates spoken replies."
+echo "  DeepSeek generates the spoken replies."
 echo ""
 echo -e "  ${BOLD}How to get your key:${NC}"
 echo "    1. Go to  https://platform.deepseek.com"
 echo "    2. Sign up and log in"
-echo "    3. Click 'API Keys' in the left sidebar → 'Create new key'"
-echo "    4. Copy the key — it looks like:  sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+echo "    3. Click 'API Keys' → 'Create new key'"
+echo "    4. Your key looks like:  sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 echo ""
-echo -e "  ${YELLOW}${BOLD}💳  Important — add credit to your account:${NC}"
-echo -e "  ${YELLOW}  DeepSeek requires a small balance before it will respond."
-echo -e "  A top-up of just \$1–\$2 is enough for months of normal use."
-echo -e "  Top up at:  platform.deepseek.com  →  'Billing' → 'Top up'${NC}"
+echo -e "  ${YELLOW}${BOLD}💳  You need to top up your account before it will work."
+echo -e "  \$1–\$2 is enough for months of use (fractions of a cent per call).${NC}"
 echo ""
 while true; do
   ask "  Paste your DeepSeek API key  (or press ENTER to skip and set later):"
   read -rp "  > " DEEPSEEK_API_KEY
-  if [[ -z "$DEEPSEEK_API_KEY" ]]; then
-    warn "Skipped — add DEEPSEEK_API_KEY to $REPO_DIR/config.py before starting"
-    break
-  elif [[ "$DEEPSEEK_API_KEY" == sk-* ]]; then
-    info "DeepSeek key accepted."
-    break
+  if   [[ -z "$DEEPSEEK_API_KEY" ]];        then warn "DeepSeek key skipped — set it in config.py before starting"; break
+  elif [[ "$DEEPSEEK_API_KEY" == sk-* ]];   then info "DeepSeek key accepted"; break
   else
-    echo -e "  ${RED}That doesn't look right — DeepSeek keys start with 'sk-'."
-    echo -e "  Try again, or press ENTER to skip for now.${NC}"
-    echo ""
+    echo -e "  ${RED}DeepSeek keys start with 'sk-' — try again or press ENTER to skip.${NC}"
   fi
 done
 
@@ -116,32 +137,23 @@ done
 # STEP 3 — Groq API key
 # =============================================================================
 section "Step 3 of 4 — Groq API key  (Speech recognition)"
-echo ""
-echo "  Groq runs Whisper large-v3 — the fastest, most accurate"
-echo "  speech-to-text available. It is free to sign up."
+echo "  Groq runs Whisper large-v3. Free to sign up, no credit card needed."
 echo ""
 echo -e "  ${BOLD}How to get your key:${NC}"
 echo "    1. Go to  https://console.groq.com"
 echo "    2. Sign up for free and log in"
-echo "    3. Click 'API Keys' in the sidebar → 'Create API Key'"
-echo "    4. Copy the key — it looks like:  gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+echo "    3. Click 'API Keys' → 'Create API Key'"
+echo "    4. Your key looks like:  gsk_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
 echo ""
-echo -e "  ${YELLOW}Note: if you skip this, speech recognition falls back to"
-echo -e "  local whisper.cpp (slower, lower accuracy).${NC}"
+echo -e "  ${YELLOW}If skipped, speech recognition falls back to local whisper.cpp.${NC}"
 echo ""
 while true; do
   ask "  Paste your Groq API key  (or press ENTER to skip):"
   read -rp "  > " GROQ_API_KEY
-  if [[ -z "$GROQ_API_KEY" ]]; then
-    warn "Skipped — local whisper.cpp will be used as STT fallback"
-    break
-  elif [[ "$GROQ_API_KEY" == gsk_* ]]; then
-    info "Groq key accepted."
-    break
+  if   [[ -z "$GROQ_API_KEY" ]];           then warn "Groq key skipped — local whisper.cpp will be used as fallback"; break
+  elif [[ "$GROQ_API_KEY" == gsk_* ]];     then info "Groq key accepted"; break
   else
-    echo -e "  ${RED}That doesn't look right — Groq keys start with 'gsk_'."
-    echo -e "  Try again, or press ENTER to skip for now.${NC}"
-    echo ""
+    echo -e "  ${RED}Groq keys start with 'gsk_' — try again or press ENTER to skip.${NC}"
   fi
 done
 
@@ -149,115 +161,222 @@ done
 # STEP 4 — Confirm
 # =============================================================================
 section "Step 4 of 4 — Confirm & install"
-echo ""
-echo "  Ready to install with these settings:"
+echo "  Settings summary:"
 echo ""
 echo -e "    Install dir : ${BOLD}$REPO_DIR${NC}"
 echo -e "    Language    : ${BOLD}$LANGUAGE${NC}"
-if [[ -n "$DEEPSEEK_API_KEY" ]]; then
-  echo -e "    DeepSeek    : ${GREEN}✓ set  (${DEEPSEEK_API_KEY:0:8}...)${NC}"
-else
-  echo -e "    DeepSeek    : ${YELLOW}⚠ not set — add to config.py before starting${NC}"
-fi
-if [[ -n "$GROQ_API_KEY" ]]; then
-  echo -e "    Groq STT    : ${GREEN}✓ set  (${GROQ_API_KEY:0:8}...)${NC}"
-else
-  echo -e "    Groq STT    : ${YELLOW}⚠ not set — will use local whisper fallback${NC}"
-fi
+[[ -n "$DEEPSEEK_API_KEY" ]] \
+  && echo -e "    DeepSeek    : ${GREEN}✓ set  (${DEEPSEEK_API_KEY:0:8}...)${NC}" \
+  || echo -e "    DeepSeek    : ${YELLOW}⚠ not set${NC}"
+[[ -n "$GROQ_API_KEY" ]] \
+  && echo -e "    Groq STT    : ${GREEN}✓ set  (${GROQ_API_KEY:0:8}...)${NC}" \
+  || echo -e "    Groq STT    : ${YELLOW}⚠ not set — local whisper fallback${NC}"
 echo ""
-ask "  Proceed with installation? [Y/n]"
+ask "  Proceed? [Y/n]"
 read -rp "  > " CONFIRM
-if [[ "$CONFIRM" =~ ^[Nn] ]]; then
-  echo "Aborted."; exit 0
-fi
+[[ "$CONFIRM" =~ ^[Nn] ]] && { echo "Aborted."; exit 0; }
 
 # =============================================================================
 # SYSTEM PACKAGES
 # =============================================================================
 section "Installing system packages"
-apt-get update -qq
+
+echo "  → apt-get update"
+apt-get update -qq >> "$INSTALL_LOG" 2>&1 \
+  || warn "apt-get update failed — package installs may fail too"
+
+echo "  → Installing core packages"
 apt-get install -y \
   python3 python3-pip python3-venv \
-  ffmpeg \
-  espeak-ng \
-  asterisk \
+  ffmpeg espeak-ng asterisk \
   git cmake build-essential \
   libssl-dev libsrtp2-dev \
-  curl wget
+  curl wget >> "$INSTALL_LOG" 2>&1 \
+  || warn "Some packages failed to install — check $INSTALL_LOG"
 
-# AMR codec libraries
-apt-get install -y libvo-amrwbenc-dev libopencore-amrnb-dev libopencore-amrwb-dev || true
+echo "  → Installing AMR codec libraries"
+apt-get install -y \
+  libvo-amrwbenc-dev libopencore-amrnb-dev libopencore-amrwb-dev \
+  >> "$INSTALL_LOG" 2>&1 \
+  || warn "AMR codec libraries unavailable in apt — will attempt ffmpeg source build"
 
-# Rebuild ffmpeg with AMR-NB if the packaged version lacks it
-if ! ffmpeg -codecs 2>/dev/null | grep -q libopencore_amrnb; then
-  warn "System ffmpeg lacks AMR-NB support — building from source (~5 min)"
-  apt-get install -y nasm yasm libx264-dev libmp3lame-dev libopus-dev
+# Check if ffmpeg actually has AMR-NB support
+if ffmpeg -codecs 2>/dev/null | grep -q libopencore_amrnb; then
+  info "ffmpeg already has AMR-NB support"
+else
+  echo ""
+  echo -e "  ${YELLOW}System ffmpeg lacks AMR-NB support — building from source (~5–10 min)${NC}"
+  echo "  This is normal on Ubuntu 22.04/24.04."
+  echo ""
+
+  BUILD_OK=true
+  apt-get install -y nasm yasm libx264-dev libmp3lame-dev libopus-dev \
+    >> "$INSTALL_LOG" 2>&1 || warn "Some ffmpeg build-deps missing"
+
   cd /tmp
-  wget -q https://ffmpeg.org/releases/ffmpeg-6.1.tar.gz
-  tar xf ffmpeg-6.1.tar.gz
-  cd ffmpeg-6.1
-  ./configure \
-    --enable-libopencore-amrnb --enable-libopencore-amrwb \
-    --enable-version3 --enable-gpl --enable-nonfree \
-    --enable-libmp3lame --enable-libopus \
-    --prefix=/usr/local \
-    --disable-doc --disable-htmlpages --disable-manpages \
-    --disable-podpages --disable-txtpages
-  make -j"$(nproc)"
-  make install
-  ldconfig
+  if [[ ! -d ffmpeg-6.1 ]]; then
+    echo "  → Downloading ffmpeg source"
+    wget -q https://ffmpeg.org/releases/ffmpeg-6.1.tar.gz -O /tmp/ffmpeg-6.1.tar.gz \
+      >> "$INSTALL_LOG" 2>&1 || { warn "ffmpeg download failed"; BUILD_OK=false; }
+    [[ "$BUILD_OK" == true ]] && tar xf /tmp/ffmpeg-6.1.tar.gz -C /tmp \
+      >> "$INSTALL_LOG" 2>&1 || { warn "ffmpeg extraction failed"; BUILD_OK=false; }
+  fi
+
+  if [[ "$BUILD_OK" == true ]] && [[ -d /tmp/ffmpeg-6.1 ]]; then
+    cd /tmp/ffmpeg-6.1
+    echo "  → Configuring ffmpeg (this takes a moment)"
+    ./configure \
+      --enable-libopencore-amrnb --enable-libopencore-amrwb \
+      --enable-version3 --enable-gpl --enable-nonfree \
+      --enable-libmp3lame --enable-libopus \
+      --prefix=/usr/local \
+      --disable-doc --disable-htmlpages --disable-manpages \
+      --disable-podpages --disable-txtpages \
+      >> "$INSTALL_LOG" 2>&1 || { warn "ffmpeg configure failed — see $INSTALL_LOG"; BUILD_OK=false; }
+  fi
+
+  if [[ "$BUILD_OK" == true ]]; then
+    echo "  → Building ffmpeg (compiling — grab a coffee)"
+    make -j"$(nproc)" >> "$INSTALL_LOG" 2>&1 \
+      || { warn "ffmpeg build failed — see $INSTALL_LOG"; BUILD_OK=false; }
+  fi
+
+  if [[ "$BUILD_OK" == true ]]; then
+    make install >> "$INSTALL_LOG" 2>&1 && ldconfig
+    if ffmpeg -codecs 2>/dev/null | grep -q libopencore_amrnb; then
+      info "ffmpeg built and installed with AMR-NB support"
+    else
+      warn "ffmpeg built but AMR-NB still not detected — audio encoding may fail"
+    fi
+  else
+    warn "ffmpeg source build failed — AMR-NB audio encoding will not work"
+    warn "Try:  sudo apt-get install -y libvo-amrwbenc-dev libopencore-amrnb-dev"
+    warn "Then re-run install.sh"
+  fi
+
   cd "$REPO_DIR"
-  info "ffmpeg built with AMR-NB support"
 fi
 
 # =============================================================================
 # PYTHON DEPENDENCIES
 # =============================================================================
 section "Installing Python dependencies"
-pip3 install --break-system-packages requests edge-tts 2>/dev/null \
-  || pip3 install requests edge-tts
 
-# =============================================================================
-# WHISPER.CPP  — cloned inside the repo directory
-# =============================================================================
-section "Building whisper.cpp  (local STT fallback)"
-WHISPER_DIR="$REPO_DIR/whisper.cpp"
-if [[ ! -f "$WHISPER_DIR/build/bin/whisper-cli" ]]; then
-  info "Cloning whisper.cpp into $WHISPER_DIR …"
-  sudo -u "$SERVICE_USER" bash -c "
-    cd '$REPO_DIR'
-    git clone https://github.com/ggerganov/whisper.cpp.git whisper.cpp
-    cd whisper.cpp
-    cmake -B build -DWHISPER_BUILD_EXAMPLES=ON
-    cmake --build build --config Release -j\$(nproc)
-    mkdir -p models
-    bash models/download-ggml-model.sh base
-  "
-  info "whisper.cpp ready at $WHISPER_DIR"
+echo "  → pip3 install requests edge-tts"
+if pip3 install --break-system-packages requests edge-tts >> "$INSTALL_LOG" 2>&1; then
+  info "Python packages installed (--break-system-packages)"
+elif pip3 install requests edge-tts >> "$INSTALL_LOG" 2>&1; then
+  info "Python packages installed"
 else
-  info "whisper.cpp already present — skipping"
+  warn "pip3 install failed — try manually: pip3 install requests edge-tts"
 fi
 
 # =============================================================================
-# ASTERISK
+# WHISPER.CPP
+# =============================================================================
+section "Building whisper.cpp  (local STT fallback)"
+WHISPER_DIR="$REPO_DIR/whisper.cpp"
+
+if [[ -f "$WHISPER_DIR/build/bin/whisper-cli" ]]; then
+  info "whisper.cpp already built — skipping"
+else
+  WHISPER_OK=true
+  echo "  → Cloning whisper.cpp into $WHISPER_DIR"
+
+  # Clean up a partial clone if present
+  if [[ -d "$WHISPER_DIR" ]] && [[ ! -f "$WHISPER_DIR/CMakeLists.txt" ]]; then
+    echo "  → Removing incomplete whisper.cpp directory"
+    rm -rf "$WHISPER_DIR"
+  fi
+
+  if [[ ! -d "$WHISPER_DIR" ]]; then
+    sudo -u "$SERVICE_USER" git clone \
+      https://github.com/ggerganov/whisper.cpp.git "$WHISPER_DIR" \
+      >> "$INSTALL_LOG" 2>&1 \
+      || { warn "whisper.cpp clone failed — STT fallback unavailable"; WHISPER_OK=false; }
+  fi
+
+  if [[ "$WHISPER_OK" == true ]]; then
+    echo "  → Building whisper.cpp"
+    sudo -u "$SERVICE_USER" bash -c "
+      cd '$WHISPER_DIR'
+      cmake -B build -DWHISPER_BUILD_EXAMPLES=ON >> '$INSTALL_LOG' 2>&1 \
+        && cmake --build build --config Release -j\$(nproc) >> '$INSTALL_LOG' 2>&1
+    " || { warn "whisper.cpp build failed — STT fallback unavailable"; WHISPER_OK=false; }
+  fi
+
+  if [[ "$WHISPER_OK" == true ]]; then
+    echo "  → Downloading base model (~145 MB)"
+    sudo -u "$SERVICE_USER" bash -c "
+      cd '$WHISPER_DIR'
+      mkdir -p models
+      bash models/download-ggml-model.sh base >> '$INSTALL_LOG' 2>&1
+    " || warn "whisper.cpp model download failed — re-run: bash whisper.cpp/models/download-ggml-model.sh base"
+  fi
+
+  if [[ "$WHISPER_OK" == true ]] && [[ -f "$WHISPER_DIR/build/bin/whisper-cli" ]]; then
+    info "whisper.cpp ready at $WHISPER_DIR"
+  else
+    warn "whisper.cpp not fully built — Groq will be used for STT if key is set"
+  fi
+fi
+
+# =============================================================================
+# ASTERISK — sip.conf
 # =============================================================================
 section "Configuring Asterisk"
 ASTERISK_CONF_DIR="/etc/asterisk"
 
-PUBLIC_IP=$(curl -s https://api.ipify.org 2>/dev/null \
-         || curl -s https://ifconfig.me 2>/dev/null \
-         || echo "YOUR_PUBLIC_IP")
-info "Detected public IP: $PUBLIC_IP"
+# Detect public IP
+echo "  → Detecting public IP"
+PUBLIC_IP=""
+for url in https://api.ipify.org https://ifconfig.me https://icanhazip.com; do
+  PUBLIC_IP=$(curl -s --max-time 5 "$url" 2>/dev/null | tr -d '[:space:]')
+  [[ -n "$PUBLIC_IP" ]] && break
+done
+if [[ -z "$PUBLIC_IP" ]]; then
+  warn "Could not auto-detect public IP — set MY_IP manually in config.py"
+  PUBLIC_IP="YOUR_PUBLIC_IP"
+else
+  info "Public IP: $PUBLIC_IP"
+fi
 
-LOCAL_NET=$(ip route | awk '/^[0-9]/ && !/default/ {print $1}' | head -1)
+# Detect local subnet
+LOCAL_NET=$(ip route 2>/dev/null | awk '/^[0-9]/ && !/default/ {print $1}' | head -1)
 [[ -z "$LOCAL_NET" ]] && LOCAL_NET="192.168.0.0/255.255.0.0"
-info "Detected local subnet: $LOCAL_NET"
+info "Local subnet: $LOCAL_NET"
 
-cp "$REPO_DIR/sip.conf" "$ASTERISK_CONF_DIR/sip.conf"
-sed -i "s|YOUR_PUBLIC_IP|$PUBLIC_IP|g"         "$ASTERISK_CONF_DIR/sip.conf"
-sed -i "s|172.31.0.0/255.255.0.0|$LOCAL_NET|g" "$ASTERISK_CONF_DIR/sip.conf"
-info "sip.conf written"
+# Verify our sip.conf exists before touching anything
+if [[ ! -f "$REPO_DIR/sip.conf" ]]; then
+  warn "sip.conf not found in repo — Asterisk SIP config NOT updated"
+  warn "Copy sip.conf from the repo manually to $ASTERISK_CONF_DIR/sip.conf"
+else
+  # Back up the existing one
+  if [[ -f "$ASTERISK_CONF_DIR/sip.conf" ]]; then
+    BACKUP="$ASTERISK_CONF_DIR/sip.conf.bak.$(date +%Y%m%d_%H%M%S)"
+    cp "$ASTERISK_CONF_DIR/sip.conf" "$BACKUP" \
+      && info "Backed up old sip.conf → $BACKUP" \
+      || warn "Could not back up old sip.conf"
+  fi
 
+  # Copy and substitute
+  if cp "$REPO_DIR/sip.conf" "$ASTERISK_CONF_DIR/sip.conf"; then
+    sed -i "s|YOUR_PUBLIC_IP|$PUBLIC_IP|g"          "$ASTERISK_CONF_DIR/sip.conf"
+    sed -i "s|172.31.0.0/255.255.0.0|$LOCAL_NET|g"  "$ASTERISK_CONF_DIR/sip.conf"
+    info "sip.conf written to $ASTERISK_CONF_DIR/sip.conf"
+
+    # Verify the substitution actually landed
+    if grep -q "YOUR_PUBLIC_IP" "$ASTERISK_CONF_DIR/sip.conf"; then
+      warn "IP substitution in sip.conf may have failed — check externaddr= manually"
+    else
+      info "externaddr=$PUBLIC_IP confirmed in sip.conf"
+    fi
+  else
+    warn "Failed to copy sip.conf to $ASTERISK_CONF_DIR/ — check permissions"
+  fi
+fi
+
+# extensions.conf — write minimal version only if missing [default]
 EXTEN_CONF="$ASTERISK_CONF_DIR/extensions.conf"
 if ! grep -q '\[default\]' "$EXTEN_CONF" 2>/dev/null; then
   cat > "$EXTEN_CONF" <<'EOF'
@@ -272,37 +391,54 @@ exten => _X.,1,Answer()
  same => n,Hangup()
 EOF
   info "Minimal extensions.conf written"
+else
+  info "extensions.conf already has [default] context — leaving it alone"
 fi
 
-systemctl enable asterisk
-systemctl restart asterisk
-sleep 2
-if systemctl is-active --quiet asterisk; then
+# Reload Asterisk — use reload first so it's less disruptive; fall back to restart
+echo "  → Reloading Asterisk"
+if systemctl is-active --quiet asterisk 2>/dev/null; then
+  asterisk -rx 'module reload' >> "$INSTALL_LOG" 2>&1 \
+    && info "Asterisk reloaded" \
+    || {
+      echo "  → Reload failed — attempting full restart"
+      systemctl restart asterisk >> "$INSTALL_LOG" 2>&1 \
+        && info "Asterisk restarted" \
+        || warn "Asterisk restart failed — check: journalctl -u asterisk"
+    }
+else
+  systemctl enable asterisk >> "$INSTALL_LOG" 2>&1 || true
+  systemctl start asterisk  >> "$INSTALL_LOG" 2>&1 \
+    && info "Asterisk started" \
+    || warn "Asterisk failed to start — check: journalctl -u asterisk"
+fi
+
+sleep 1
+if systemctl is-active --quiet asterisk 2>/dev/null; then
   info "Asterisk is running"
 else
-  warn "Asterisk failed to start — check: journalctl -u asterisk"
+  warn "Asterisk does not appear to be running"
 fi
 
 # =============================================================================
-# GENERATE config.py  (uses _HERE-relative paths — works in any location)
+# WRITE config.py
 # =============================================================================
 section "Writing config.py"
+
 cat > "$REPO_DIR/config.py" <<PYEOF
 # =============================================================================
-# PoC AI Proxy — Configuration  (auto-generated by install.sh)
-# All paths are relative to this file's location — move the whole folder
-# and everything still works.
+# PoC AI Proxy — Configuration  (auto-generated by install.sh — $(date))
+# All paths are relative to this file's directory.
 # =============================================================================
 import os
 _HERE = os.path.dirname(os.path.abspath(__file__))
 
-# Language for STT, TTS, and AI responses
-# Options: "dutch", "english", "french", "german", "spanish"
+# Language: "dutch", "english", "french", "german", "spanish"
 LANGUAGE = "$LANGUAGE"
 
 # Network
-MY_IP    = "$PUBLIC_IP"   # Public IP of this server — used in SDP offers
-PHONE_IP = ""             # IP of the PoC phone (informational only)
+MY_IP    = "$PUBLIC_IP"
+PHONE_IP = ""
 
 LISTEN_PORT   = 5060
 ASTERISK_IP   = "127.0.0.1"
@@ -318,16 +454,16 @@ DEEPSEEK_API_KEY = "$DEEPSEEK_API_KEY"
 # Groq:     https://console.groq.com       (free tier available)
 GROQ_API_KEY     = "$GROQ_API_KEY"
 
-# Paths — relative to this config file, so the repo is fully portable
+# Paths — all relative to this file, so the repo is fully portable
 WHISPER          = os.path.join(_HERE, "whisper.cpp", "build", "bin", "whisper-cli")
 MODEL            = os.path.join(_HERE, "whisper.cpp", "models", "ggml-base.bin")
 HOLD_MUSIC_FILES = [os.path.join(_HERE, "beepboop.wav")]
 LOG_FILE         = os.path.join(_HERE, "sip_proxy.log")
 
 # =============================================================================
-# Language profiles
+# Language profiles — add new ones here
 # Format: "key": (whisper_lang_code, edge_tts_voice, system_prompt)
-# Add new languages here.  List TTS voices:  edge-tts --list-voices
+# List TTS voices:  edge-tts --list-voices
 # =============================================================================
 LANGUAGE_PROFILES = {
     "dutch": (
@@ -363,27 +499,36 @@ LANGUAGE_PROFILES = {
 }
 PYEOF
 
-chown "$SERVICE_USER:$SERVICE_USER" "$REPO_DIR/config.py"
-chmod 600 "$REPO_DIR/config.py"
-info "config.py written"
+if [[ -f "$REPO_DIR/config.py" ]]; then
+  chown "$SERVICE_USER:$SERVICE_USER" "$REPO_DIR/config.py"
+  chmod 600 "$REPO_DIR/config.py"
+  info "config.py written and permissions set (600)"
+else
+  warn "config.py could not be written — check disk space / permissions"
+fi
 
 # =============================================================================
 # SYSTEMD SERVICE
-# Write the install dir to an env file so the service unit is location-agnostic
 # =============================================================================
 section "Installing systemd service"
 
-# Write the env file that the service unit reads
-echo "INSTALL_DIR=$REPO_DIR" > /etc/poc-proxy.env
-chmod 600 /etc/poc-proxy.env
-info "Wrote /etc/poc-proxy.env  (INSTALL_DIR=$REPO_DIR)"
+echo "INSTALL_DIR=$REPO_DIR" > /etc/poc-proxy.env \
+  && chmod 600 /etc/poc-proxy.env \
+  && info "Wrote /etc/poc-proxy.env" \
+  || warn "Could not write /etc/poc-proxy.env"
 
-cp "$REPO_DIR/poc-proxy.service" /etc/systemd/system/poc-proxy.service
-systemctl daemon-reload
-systemctl enable poc-proxy
+if [[ -f "$REPO_DIR/poc-proxy.service" ]]; then
+  cp "$REPO_DIR/poc-proxy.service" /etc/systemd/system/poc-proxy.service \
+    && systemctl daemon-reload \
+    && systemctl enable poc-proxy >> "$INSTALL_LOG" 2>&1 \
+    && info "poc-proxy.service installed and enabled" \
+    || warn "Failed to install systemd service — do it manually"
+else
+  warn "poc-proxy.service not found in repo — service not installed"
+fi
 
 # =============================================================================
-# DONE
+# DONE — Summary
 # =============================================================================
 echo ""
 echo -e "${GREEN}${BOLD}"
@@ -391,26 +536,29 @@ echo "  ╔═══════════════════════
 echo "  ║        Installation complete! ✓          ║"
 echo "  ╚══════════════════════════════════════════╝"
 echo -e "${NC}"
-echo "  Summary:"
 echo -e "    Install dir : ${BOLD}$REPO_DIR${NC}"
 echo -e "    Language    : ${BOLD}$LANGUAGE${NC}"
 echo -e "    Server IP   : ${BOLD}$PUBLIC_IP${NC}"
 echo -e "    Config      : ${BOLD}$REPO_DIR/config.py${NC}"
+echo -e "    Full log    : ${BOLD}$INSTALL_LOG${NC}"
 echo ""
 
-if [[ -z "$DEEPSEEK_API_KEY" ]] || [[ -z "$GROQ_API_KEY" ]]; then
-  echo -e "  ${YELLOW}⚠  One or more API keys were not set."
-  echo "     Edit the config file before starting the proxy:"
-  echo -e "     nano $REPO_DIR/config.py${NC}"
+# Show any accumulated warnings
+if [[ ${#WARNINGS[@]} -gt 0 ]]; then
+  echo -e "  ${YELLOW}${BOLD}Warnings (non-fatal — review before starting):${NC}"
+  for w in "${WARNINGS[@]}"; do
+    echo -e "    ${YELLOW}⚠${NC}  $w"
+  done
   echo ""
 fi
 
-echo "  ── Start the proxy ──────────────────────────────────"
-echo -e "    ${BOLD}sudo systemctl start poc-proxy${NC}"
-echo ""
-echo "  ── Follow live logs ─────────────────────────────────"
-echo -e "    ${BOLD}sudo journalctl -u poc-proxy -f${NC}"
-echo ""
-echo "  ── Check Asterisk SIP peers ─────────────────────────"
-echo -e "    ${BOLD}sudo asterisk -rx 'sip show peers'${NC}"
+echo "  ── Next steps ───────────────────────────────────────"
+if [[ -z "$DEEPSEEK_API_KEY" ]] || [[ -z "$GROQ_API_KEY" ]]; then
+  echo -e "  ${YELLOW}  Edit config before starting:${NC}"
+  echo -e "    nano $REPO_DIR/config.py"
+  echo ""
+fi
+echo -e "    ${BOLD}sudo systemctl start poc-proxy${NC}         # start the proxy"
+echo -e "    ${BOLD}sudo journalctl -u poc-proxy -f${NC}        # follow logs"
+echo -e "    ${BOLD}sudo asterisk -rx 'sip show peers'${NC}     # check phone registration"
 echo ""
