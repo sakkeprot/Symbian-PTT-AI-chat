@@ -32,8 +32,8 @@ Nokia/Symbian PoC phone
 | edge-tts | Neural TTS (preferred) |
 | espeak-ng | TTS fallback |
 | whisper.cpp | Local STT fallback |
-**| Groq API key | Cloud STT (Whisper large-v3) |**
-**| DeepSeek API key | LLM replies. THIS NEEDS TO BE LOADED WITH SOME MONEY! | **
+| Groq API key | Cloud STT (Whisper large-v3) |
+| DeepSeek API key | LLM replies. THIS NEEDS TO BE LOADED WITH SOME MONEY! | 
 
 ---
 
