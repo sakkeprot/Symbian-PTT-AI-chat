@@ -49,7 +49,6 @@ This install will take like 20 minutes because it needs to compile ffmpeg to get
 The script will:
 - Install system packages (`ffmpeg`, `espeak-ng`, `asterisk`, build tools)
 - Build **ffmpeg** with AMR-NB support if the package version lacks it
-- Clone and build **whisper.cpp** with the `base` model
 - Write `/etc/asterisk/sip.conf` (auto-detects your public IP and subnet)
 - Install the systemd service `poc-proxy.service`
 
