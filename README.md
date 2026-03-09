@@ -44,6 +44,7 @@ git clone https://github.com/sakkeprot/Symbian-PTT-AI-chat.git
 cd Symbian-PTT-AI-chat
 sudo bash install.sh
 ```
+This install will take like 20 minutes because it needs to compile ffmpeg to get the encode functionality.
 
 The script will:
 - Install system packages (`ffmpeg`, `espeak-ng`, `asterisk`, build tools)
