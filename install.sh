@@ -509,22 +509,40 @@ fi
 
 # =============================================================================
 # SYSTEMD SERVICE
+# Write the unit file with real absolute paths — systemd does NOT expand
+# environment variables in WorkingDirectory= so we bake them in here.
 # =============================================================================
 section "Installing systemd service"
 
-echo "INSTALL_DIR=$REPO_DIR" > /etc/poc-proxy.env \
-  && chmod 600 /etc/poc-proxy.env \
-  && info "Wrote /etc/poc-proxy.env" \
-  || warn "Could not write /etc/poc-proxy.env"
+PYTHON_BIN="$(command -v python3 || echo /usr/bin/python3)"
 
-if [[ -f "$REPO_DIR/poc-proxy.service" ]]; then
-  cp "$REPO_DIR/poc-proxy.service" /etc/systemd/system/poc-proxy.service \
-    && systemctl daemon-reload \
+cat > /etc/systemd/system/poc-proxy.service <<SVCEOF
+[Unit]
+Description=PoC AI Proxy (SIP/RTP/TBCP walkie-talkie AI)
+After=network.target asterisk.service
+Wants=asterisk.service
+
+[Service]
+Type=simple
+WorkingDirectory=$REPO_DIR
+ExecStart=$PYTHON_BIN $REPO_DIR/poc_proxy.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+TimeoutStartSec=10
+
+[Install]
+WantedBy=multi-user.target
+SVCEOF
+
+if [[ -f /etc/systemd/system/poc-proxy.service ]]; then
+  systemctl daemon-reload >> "$INSTALL_LOG" 2>&1 \
     && systemctl enable poc-proxy >> "$INSTALL_LOG" 2>&1 \
-    && info "poc-proxy.service installed and enabled" \
-    || warn "Failed to install systemd service — do it manually"
+    && info "poc-proxy.service installed (WorkingDirectory=$REPO_DIR)" \
+    || warn "systemctl enable failed — try: sudo systemctl daemon-reload && sudo systemctl enable poc-proxy"
 else
-  warn "poc-proxy.service not found in repo — service not installed"
+  warn "Failed to write /etc/systemd/system/poc-proxy.service — check permissions"
 fi
 
 # =============================================================================
