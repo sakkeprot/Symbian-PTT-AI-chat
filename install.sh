@@ -220,9 +220,9 @@ else
   fi
 
   if [[ "$BUILD_OK" == true ]]; then
-    echo "  → Configuring ffmpeg"
-    # Run configure directly as root — we are already root and this is simplest
+    echo "  → Configuring ffmpeg  (checking your system, ~1 min)"
     cd "$FFMPEG_DIR"
+
     ./configure \
       --enable-libopencore-amrnb \
       --enable-libopencore-amrwb \
@@ -231,15 +231,86 @@ else
       --prefix=/usr/local \
       --disable-doc --disable-htmlpages \
       --disable-manpages --disable-podpages --disable-txtpages \
-      >> "$INSTALL_LOG" 2>&1 \
-      || { warn "ffmpeg configure failed — see $INSTALL_LOG"; BUILD_OK=false; }
+      >> "$INSTALL_LOG" 2>&1 &
+    CFG_PID=$!
+
+    SPIN='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    SPIN_IDX=0
+    while kill -0 "$CFG_PID" 2>/dev/null; do
+      LAST=$(tail -1 "$INSTALL_LOG" 2>/dev/null | sed 's|^checking ||' | cut -c1-60)
+      SPINNER="${SPIN:$SPIN_IDX:1}"
+      SPIN_IDX=$(( (SPIN_IDX + 1) % ${#SPIN} ))
+      printf "\r  %s  %-65s" "$SPINNER" "$LAST"
+      sleep 0.3
+    done
+    printf "\r%-80s\r" " "
+
+    wait "$CFG_PID"
+    if [[ $? -ne 0 ]]; then
+      warn "ffmpeg configure failed — see $INSTALL_LOG"
+      BUILD_OK=false
+    else
+      echo -e "  ${GREEN}✓${NC}  Configure complete"
+    fi
   fi
 
   if [[ "$BUILD_OK" == true ]]; then
-    echo "  → Compiling ffmpeg  (this is the slow part: Just keep patient. It can take an hour even, depending on how cheap your server is lol.)"
+    echo "  → Compiling ffmpeg  (slow on cheap servers — can take 10–60 min)"
+    echo "    Progress is shown live below. Log: $INSTALL_LOG"
+    echo ""
     cd "$FFMPEG_DIR"
-    make -j"$(nproc)" >> "$INSTALL_LOG" 2>&1 \
-      || { warn "ffmpeg compile failed — see $INSTALL_LOG"; BUILD_OK=false; }
+
+    # Count approximate total .c files to compile for progress %
+    TOTAL_FILES=$(find . -name '*.c' | wc -l)
+    [[ "$TOTAL_FILES" -lt 1 ]] && TOTAL_FILES=1000
+
+    # Run make in background, all output goes to log
+    make -j"$(nproc)" >> "$INSTALL_LOG" 2>&1 &
+    MAKE_PID=$!
+
+    SPIN='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
+    SPIN_IDX=0
+    COMPILED=0
+    LAST_LINE=""
+
+    while kill -0 "$MAKE_PID" 2>/dev/null; do
+      # Count how many .o files exist as a rough compile counter
+      COMPILED=$(find "$FFMPEG_DIR" -name '*.o' 2>/dev/null | wc -l)
+      PCT=$(( COMPILED * 100 / TOTAL_FILES ))
+      [[ "$PCT" -gt 99 ]] && PCT=99
+
+      # Build progress bar (30 chars wide)
+      FILLED=$(( PCT * 30 / 100 ))
+      BAR=""
+      for (( i=0; i<FILLED; i++ ));  do BAR="${BAR}█"; done
+      for (( i=FILLED; i<30; i++ )); do BAR="${BAR}░"; done
+
+      # Get current file being compiled from log (strip path noise)
+      RAW=$(tail -3 "$INSTALL_LOG" 2>/dev/null | grep -E '^\s*(CC|CXX|LD|AR|LINK|STRIP|GEN|DEP)' | tail -1)
+      STEP=$(echo "$RAW" | awk '{print $1}' | tr -d ' ')
+      FILE=$(echo "$RAW" | awk '{print $NF}' | sed 's|.*/||' | cut -c1-35)
+      [[ -z "$STEP" ]] && STEP="..." && FILE=""
+
+      SPINNER="${SPIN:$SPIN_IDX:1}"
+      SPIN_IDX=$(( (SPIN_IDX + 1) % ${#SPIN} ))
+
+      printf "\r  %s  [%s] %3d%%  %-6s %-35s" \
+        "$SPINNER" "$BAR" "$PCT" "$STEP" "$FILE"
+
+      sleep 0.3
+    done
+
+    # Clear progress line
+    printf "\r%-90s\r" " "
+
+    wait "$MAKE_PID"
+    MAKE_EXIT=$?
+    if [[ "$MAKE_EXIT" -ne 0 ]]; then
+      warn "ffmpeg compile failed — see $INSTALL_LOG"
+      BUILD_OK=false
+    else
+      echo -e "  ${GREEN}✓${NC}  Compilation complete"
+    fi
   fi
 
   if [[ "$BUILD_OK" == true ]]; then
