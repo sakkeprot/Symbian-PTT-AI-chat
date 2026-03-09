@@ -39,7 +39,7 @@ Nokia/Symbian PoC phone
 ## Quick install
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/poc-ai-proxy.git
+git clone https://github.com/sakkeprot/Symbian-PTT-AI-chat.git
 cd poc-ai-proxy
 sudo bash install.sh
 ```
