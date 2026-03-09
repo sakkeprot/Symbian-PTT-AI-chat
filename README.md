@@ -53,6 +53,17 @@ The script will:
 
 ---
 
+
+## Phone setup (Nokia / Symbian PoC client)
+
+1. Register the phone against your server IP on SIP port **5060**.
+2. Use the account name **`symbian`** — the proxy identifies phones by the `symbian` string in the User-Agent header.
+3. No password is required (Asterisk is configured with `insecure=register`).
+4. Set audio codec preference to **AMR-NB** (payload type 106) if your client allows it; otherwise ulaw/alaw will still work via Asterisk.
+
+---
+
+
 ## Manual setup (step by step)
 
 ### 1 — System packages
@@ -187,16 +198,6 @@ sudo systemctl enable --now poc-proxy
 sudo journalctl -u poc-proxy -f
 ```
 
----
-
-## Phone setup (Nokia / Symbian PoC client)
-
-1. Register the phone against your server IP on SIP port **5060**.
-2. Use the account name **`symbian`** — the proxy identifies phones by the `symbian` string in the User-Agent header.
-3. No password is required (Asterisk is configured with `insecure=register`).
-4. Set audio codec preference to **AMR-NB** (payload type 106) if your client allows it; otherwise ulaw/alaw will still work via Asterisk.
-
----
 
 ## Adding a new language
 
