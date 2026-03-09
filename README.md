@@ -262,7 +262,6 @@ Open the following UDP ports inbound:
 | 19998 | UDP | RTP audio |
 | 19999 | UDP | TBCP floor control |
 
-Port 5061 (Asterisk) should be **localhost only** — the proxy relays to it internally.
 
 ### 7 — Run
 
