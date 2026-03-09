@@ -236,7 +236,7 @@ else
   fi
 
   if [[ "$BUILD_OK" == true ]]; then
-    echo "  → Compiling ffmpeg  (this is the slow part — ~5-10 min)"
+    echo "  → Compiling ffmpeg  (this is the slow part: Just keep patient. It can take an hour even, depending on how cheap your server is lol.)"
     cd "$FFMPEG_DIR"
     make -j"$(nproc)" >> "$INSTALL_LOG" 2>&1 \
       || { warn "ffmpeg compile failed — see $INSTALL_LOG"; BUILD_OK=false; }
