@@ -376,8 +376,17 @@ else
   info "Public IP: $PUBLIC_IP"
 fi
 
-LOCAL_NET=$(ip route 2>/dev/null | awk '/^[0-9]/ && !/default/ {print $1}' | head -1)
-[[ -z "$LOCAL_NET" ]] && LOCAL_NET="192.168.0.0/255.255.0.0"
+# Detect local subnet — Asterisk needs network/dotted-mask format (not CIDR).
+# Grab the first private RFC-1918 route, widen to /16 to cover the whole VPC,
+# and convert to dotted-decimal mask so Asterisk accepts it.
+RAW_NET=$(ip route 2>/dev/null | awk '/^(10\.|172\.|192\.168\.)/ && !/default/ {print $1}' | head -1)
+if [[ -n "$RAW_NET" ]]; then
+  BASE_IP=$(echo "$RAW_NET" | cut -d/ -f1)
+  NET_BASE=$(echo "$BASE_IP" | awk -F. '{print $1"."$2".0.0"}')
+  LOCAL_NET="${NET_BASE}/255.255.0.0"
+else
+  LOCAL_NET="172.31.0.0/255.255.0.0"
+fi
 info "Local subnet: $LOCAL_NET"
 
 if [[ ! -f "$REPO_DIR/sip.conf" ]]; then
@@ -392,8 +401,8 @@ else
   fi
 
   if cp "$REPO_DIR/sip.conf" "$ASTERISK_CONF_DIR/sip.conf"; then
-    sed -i "s|YOUR_PUBLIC_IP|$PUBLIC_IP|g"          "$ASTERISK_CONF_DIR/sip.conf"
-    sed -i "s|172.31.0.0/255.255.0.0|$LOCAL_NET|g"  "$ASTERISK_CONF_DIR/sip.conf"
+    sed -i "s|YOUR_PUBLIC_IP|$PUBLIC_IP|g"           "$ASTERISK_CONF_DIR/sip.conf"
+    sed -i "s|^localnet=.*|localnet=$LOCAL_NET|"    "$ASTERISK_CONF_DIR/sip.conf"
 
     if grep -q "YOUR_PUBLIC_IP" "$ASTERISK_CONF_DIR/sip.conf"; then
       warn "IP substitution may have failed — check externaddr= in sip.conf manually"
