@@ -52,6 +52,7 @@ The script will:
 - Write `/etc/asterisk/sip.conf` (auto-detects your public IP and subnet)
 - Install the systemd service `poc-proxy.service`
 
+**MAKE SURE YOU HAVE SOME MONEY ON YOUR DEEPSEEK API, you can top up at platform.deepseek.com  $1 will be enough for months of use**
 ---
 ### 6 — Firewall / Security Groups
 
