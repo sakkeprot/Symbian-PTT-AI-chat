@@ -1,0 +1,19 @@
+[Unit]
+Description=PoC AI Proxy (SIP/RTP/TBCP walkie-talkie AI)
+After=network.target asterisk.service
+Wants=asterisk.service
+
+[Service]
+Type=simple
+User=ubuntu
+WorkingDirectory=/home/ubuntu/poc-ai-proxy
+ExecStart=/usr/bin/python3 /home/ubuntu/poc-ai-proxy/poc_proxy.py
+Restart=on-failure
+RestartSec=5
+StandardOutput=journal
+StandardError=journal
+# Give the proxy time to bind ports on restart
+TimeoutStartSec=10
+
+[Install]
+WantedBy=multi-user.target
