@@ -25,7 +25,7 @@ from config import (
     LISTEN_PORT, ASTERISK_IP, ASTERISK_PORT,
     RTP_PORT, TBCP_PORT, SERVER_SSRC,
     DEEPSEEK_API_KEY, GROQ_API_KEY,
-    WHISPER, MODEL, HOLD_MUSIC_FILES,
+    HOLD_MUSIC_FILES,
     LOG_FILE,
 )
 
@@ -343,24 +343,7 @@ def do_stt(audio):
         except Exception as e:
             log("STT", f"Groq failed ({e})")
     else:
-        log("STT", "No GROQ_API_KEY — using local whisper")
-
-    # Local whisper.cpp fallback
-    if not text and os.path.exists(WHISPER):
-        result = subprocess.run(
-            [WHISPER, '-m', MODEL, '-f', wav_path,
-             '--max-len', '100', '-l', WHISPER_LANG],
-            capture_output=True, timeout=30)
-        lines = []
-        for line in result.stdout.decode(errors="ignore").splitlines():
-            line = re.sub(r'^\[\d+:\d+:\d+\.\d+ --> \d+:\d+:\d+\.\d+\]\s*', '',
-                          line.strip()).strip()
-            if line and not re.search(
-                    r'\(C\)|BLANK_AUDIO|TV GELDERLAND|Ondertiteling|\[muziek\]',
-                    line, re.I):
-                lines.append(line)
-        text = ' '.join(lines)
-        log("STT", f"Local [{WHISPER_LANG}]: '{text}'")
+        log("STT", "No GROQ_API_KEY set — cannot perform STT")
 
     os.unlink(wav_path)
     if not text: log("STT", "No text recognised"); finish(); return
