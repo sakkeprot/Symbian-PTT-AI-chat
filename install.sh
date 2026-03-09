@@ -269,8 +269,8 @@ else
     SPIN='⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏'
     SPIN_IDX=0
     LOG_START=$(wc -l < "$INSTALL_LOG" 2>/dev/null || echo 0)
-    # ffmpeg has roughly 2000 compile lines on a typical build
-    ESTIMATED_LINES=2000
+    # ffmpeg has roughly 4000 compile lines on a typical build (t2/t3 micro)
+    ESTIMATED_LINES=4000
 
     while kill -0 "$MAKE_PID" 2>/dev/null; do
       # Progress: count new lines added to log since compile started
