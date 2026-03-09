@@ -32,8 +32,8 @@ Nokia/Symbian PoC phone
 | edge-tts | Neural TTS (preferred) |
 | espeak-ng | TTS fallback |
 | whisper.cpp | Local STT fallback |
-| Groq API key | Cloud STT (Whisper large-v3) |
-| DeepSeek API key | LLM replies |
+**| Groq API key | Cloud STT (Whisper large-v3) |**
+**| DeepSeek API key | LLM replies. THIS NEEDS TO BE LOADED WITH SOME MONEY! | **
 
 ---
 
@@ -53,6 +53,15 @@ The script will:
 - Install the systemd service `poc-proxy.service`
 
 ---
+### 6 — Firewall / Security Groups
+
+Open the following UDP ports inbound on your server:
+
+| Port | Protocol | Purpose |
+|------|----------|---------|
+| 5060 | UDP | SIP (proxy entry point) |
+| 19998 | UDP | RTP audio |
+| 19999 | UDP | TBCP floor control |
 
 ---
 
