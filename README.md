@@ -57,7 +57,7 @@ The script will:
 
 ## Phone setup (Nokia / Symbian PoC client)
 
-Tested on Nokia E-series handsets running Symbian with the built-in PTT client.
+Tested on Nokia E72 running Symbian with the built-in PTT client.
 Replace `PUBLIC_IP` throughout with your server's actual IP address.
 
 ---
@@ -137,12 +137,13 @@ Save, then set it as default: **Options → Set as default**
 
 You don't need to stay in the PTT app. Press the home button to background it — the PTT button stays active. To talk to the AI:
 
-1. **Hold the PTT button** and speak your message
+1. **Hold the PTT button** and speak your message 
 2. Release the button — the AI starts processing
 3. Hold music plays while it thinks
-4. The AI reply is spoken back through the earpiece
+4. The AI reply is spoken back through the speaker
 5. The floor is released and you can speak again
 
+> If you don't hear anything, check to see if your phone is on silent mode lol.
 ---
 
 
