@@ -96,7 +96,7 @@ Open **Registrar server →**
 | Registrar server address | `sip:PUBLIC_IP` |
 | Realm | `asterisk` |
 | Username | `symbian` |
-| Password | `yourpassword` |
+| Password | `yourpassword` yes its literally 'yourpassword' |
 | Transport type | `UDP` |
 | Port | `5060` |
 
