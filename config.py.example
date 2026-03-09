@@ -2,7 +2,12 @@
 # PoC AI Proxy — Configuration template
 # Copy this to config.py and fill in your values.
 # config.py is in .gitignore — never commit it with real keys.
+#
+# All file paths are relative to the repo root (the folder this file is in),
+# so the proxy works wherever you cloned or placed the repo.
 # =============================================================================
+import os
+_HERE = os.path.dirname(os.path.abspath(__file__))
 
 # ---- Language ----------------------------------------------------------------
 # Controls STT language, TTS voice, and AI system prompt.
@@ -22,21 +27,26 @@ TBCP_PORT   = 19999
 SERVER_SSRC = 0x12345678
 
 # ---- API keys ---------------------------------------------------------------
-DEEPSEEK_API_KEY = ""   # https://platform.deepseek.com
-GROQ_API_KEY     = ""   # https://console.groq.com  (leave blank for local STT only)
+# DeepSeek: https://platform.deepseek.com  (top up $1-2 for months of use)
+DEEPSEEK_API_KEY = ""
+# Groq:     https://console.groq.com       (free tier, used for Whisper STT)
+GROQ_API_KEY     = ""
 
-# ---- Local paths ------------------------------------------------------------
-WHISPER          = "/home/ubuntu/whisper.cpp/build/bin/whisper-cli"
-MODEL            = "/home/ubuntu/whisper.cpp/models/ggml-base.bin"
-HOLD_MUSIC_FILES = ["/home/ubuntu/beepboop.wav"]
+# ---- Paths (relative to repo root — no need to change these) ----------------
+# whisper.cpp is cloned into the repo folder by install.sh
+WHISPER = os.path.join(_HERE, "whisper.cpp", "build", "bin", "whisper-cli")
+MODEL   = os.path.join(_HERE, "whisper.cpp", "models", "ggml-base.bin")
 
-# ---- Logging ----------------------------------------------------------------
-LOG_FILE = "/home/ubuntu/sip_proxy.log"
+# Hold music played while the AI is thinking — beepboop.wav ships with the repo
+HOLD_MUSIC_FILES = [os.path.join(_HERE, "beepboop.wav")]
+
+# Log file written next to the proxy
+LOG_FILE = os.path.join(_HERE, "sip_proxy.log")
 
 # =============================================================================
-# Language profiles — add new languages here
+# Language profiles
 # Format: "key": (whisper_lang_code, edge_tts_voice, system_prompt)
-# List available TTS voices with:  edge-tts --list-voices
+# Add new languages here.  List available TTS voices:  edge-tts --list-voices
 # =============================================================================
 LANGUAGE_PROFILES = {
     "dutch": (

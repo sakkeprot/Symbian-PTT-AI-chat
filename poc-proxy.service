@@ -5,14 +5,14 @@ Wants=asterisk.service
 
 [Service]
 Type=simple
-User=ubuntu
-WorkingDirectory=/home/ubuntu/poc-ai-proxy
-ExecStart=/usr/bin/python3 /home/ubuntu/poc-ai-proxy/poc_proxy.py
+# INSTALL_DIR is written by install.sh into /etc/poc-proxy.env
+EnvironmentFile=/etc/poc-proxy.env
+WorkingDirectory=${INSTALL_DIR}
+ExecStart=/usr/bin/python3 ${INSTALL_DIR}/poc_proxy.py
 Restart=on-failure
 RestartSec=5
 StandardOutput=journal
 StandardError=journal
-# Give the proxy time to bind ports on restart
 TimeoutStartSec=10
 
 [Install]
