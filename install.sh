@@ -535,8 +535,20 @@ SVCEOF
 if [[ -f /etc/systemd/system/poc-proxy.service ]]; then
   systemctl daemon-reload >> "$INSTALL_LOG" 2>&1 \
     && systemctl enable poc-proxy >> "$INSTALL_LOG" 2>&1 \
-    && info "poc-proxy.service installed  (WorkingDirectory=$REPO_DIR)" \
+    && info "poc-proxy.service enabled (will start at boot)" \
     || warn "systemctl enable failed — try: sudo systemctl daemon-reload && sudo systemctl enable poc-proxy"
+
+  echo "  → Starting poc-proxy now"
+  systemctl start poc-proxy >> "$INSTALL_LOG" 2>&1 \
+    && info "poc-proxy started" \
+    || warn "poc-proxy failed to start — check: sudo journalctl -u poc-proxy -n 30"
+
+  sleep 2
+  if systemctl is-active --quiet poc-proxy; then
+    info "poc-proxy is running ✓"
+  else
+    warn "poc-proxy does not appear to be running — check: sudo journalctl -u poc-proxy -n 30"
+  fi
 else
   warn "Failed to write poc-proxy.service — check /etc/systemd/system/ permissions"
 fi
@@ -567,11 +579,12 @@ fi
 
 echo "  ── Next steps ───────────────────────────────────────"
 if [[ -z "$DEEPSEEK_API_KEY" ]] || [[ -z "$GROQ_API_KEY" ]]; then
-  echo -e "  ${YELLOW}  Edit config before starting:${NC}"
+  echo -e "  ${YELLOW}  Edit config then restart the proxy:${NC}"
   echo -e "    nano $REPO_DIR/config.py"
+  echo -e "    sudo systemctl restart poc-proxy"
   echo ""
 fi
-echo -e "    ${BOLD}sudo systemctl start poc-proxy${NC}          # start the proxy"
 echo -e "    ${BOLD}sudo journalctl -u poc-proxy -f${NC}         # follow logs"
+echo -e "    ${BOLD}sudo systemctl restart poc-proxy${NC}        # restart after config changes"
 echo -e "    ${BOLD}sudo asterisk -rx 'sip show peers'${NC}      # check phone registration"
 echo ""
