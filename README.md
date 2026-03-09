@@ -2,7 +2,7 @@
 
 A SIP/RTP proxy that turns a **PoC (Push-to-Talk over Cellular) phone** into an AI walkie-talkie. Press PTT → speak → get an AI response spoken back over the radio channel.
 
-**I'm hosting a live server open to the public at 51.21.194.249 . please use at your own risk. I still don't quite understand how PTT works completely so it might be that there can only be one user named 'symbian' or maybe you hear other people on there talking or people can hear your conversations. I don't know, but you can use it to try it out) At least there must be symbian in the username for the server to allow you so keep that in mind.**
+**I'm hosting a live server open to the public at 51.21.194.249 . please use at your own risk. I still don't quite understand how PTT works completely so it might be that there can only be one user named 'symbian' or maybe you hear other people on there talking or people can hear your conversations. I don't know, but you can use it to try it out) At least there must be symbian in the username for the server to allow you in so keep that in mind.**
 
 ```
 Nokia/Symbian PoC phone
