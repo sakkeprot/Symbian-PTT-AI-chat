@@ -120,7 +120,7 @@ sudo nano /etc/asterisk/sip.conf
 ```
 
 ```ini
-externaddr=YOUR_PUBLIC_IP        ; e.g. 51.20.75.225
+externaddr=YOUR_PUBLIC_IP        ; e.g. 61.10.65.245
 localnet=172.31.0.0/255.255.0.0  ; your VPC/LAN subnet
 ```
 
