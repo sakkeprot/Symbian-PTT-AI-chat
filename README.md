@@ -306,7 +306,7 @@ Open `config.py` and add a row to `LANGUAGE_PROFILES`:
 ),
 ```
 
-Then set `LANGUAGE = "portuguese"` and restart.
+Then set `LANGUAGE = "portuguese"` and restart the poc-proxy service with the command sudo service poc-proxy restart.
 
 ---
 
