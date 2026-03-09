@@ -262,4 +262,4 @@ poc-ai-proxy/
 
 ## License
 
-MIT
+use it and abuse it
