@@ -18,6 +18,7 @@ Nokia/Symbian PoC phone
     │  edge-tts / espeak  │  reply → speech
     └─────────────────────┘
 ```
+![IMG_20260309_121805 (1)](https://github.com/user-attachments/assets/a29a2bf3-380f-4e89-a593-7e64465c9701)
 
 ---
 
